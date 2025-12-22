@@ -11,27 +11,37 @@ app = Flask(__name__)
 # aaa configuración de Instagram -bynd
 INSTAGRAM_USERNAME = os.getenv('IG_USERNAME')
 INSTAGRAM_PASSWORD = os.getenv('IG_PASSWORD')
+SESSION_JSON = os.getenv('SESSION_JSON')  # ey la sesión desde variable de entorno -bynd
 
 client = Client()
 chats_data = {}
 
 def login_instagram():
-    # ey intentamos login con session guardada primero -bynd
+    # vavavava primero intentamos con la sesión guardada -bynd
     try:
-        if os.path.exists('session.json'):
-            client.load_settings('session.json')
+        if SESSION_JSON:
+            # chintrolas cargamos la sesión desde la variable de entorno -bynd
+            session_data = json.loads(SESSION_JSON)
+            client.set_settings(session_data)
             client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            print("Login exitoso con session guardada")
+            print("✓ Login exitoso con sesión guardada")
         else:
-            raise Exception("No session file")
-    except:
-        # chintrolas no había session, login normal -bynd
-        client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        client.dump_settings('session.json')
-        print("Login exitoso, session nueva guardada")
+            # fokeis no hay sesión, login normal -bynd
+            print("No hay SESSION_JSON, haciendo login normal...")
+            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            print("✓ Login exitoso")
+    except Exception as e:
+        print(f"✗ Error en login: {e}")
+        # ala último intento sin sesión -bynd
+        try:
+            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            print("✓ Login exitoso (segundo intento)")
+        except Exception as e2:
+            print(f"✗ Error fatal en login: {e2}")
+            raise e2
 
 def fetch_instagram_messages():
-    # vavavava esta función corre en background cada 30 seg -bynd
+    # q chidoteee esta función corre en background cada 30 seg -bynd
     while True:
         try:
             threads = client.direct_threads(amount=5)
@@ -42,7 +52,7 @@ def fetch_instagram_messages():
                 
                 # aaa procesamos los mensajes -bynd
                 chat_messages = []
-                for msg in reversed(messages):  # q queden en orden cronológico -bynd
+                for msg in reversed(messages):  # orden cronológico -bynd
                     sender_name = msg.user_id
                     # ey buscamos el username real -bynd
                     try:
@@ -65,12 +75,10 @@ def fetch_instagram_messages():
                     'last_updated': datetime.now().isoformat()
                 }
             
-            # fokeis guardamos en archivo por si acaso -bynd
-            with open('chats.json', 'w') as f:
-                json.dump(chats_data, f)
+            print(f"✓ Fetched {len(chats_data)} chats")
                 
         except Exception as e:
-            print(f"Error fetching messages: {e}")
+            print(f"✗ Error fetching messages: {e}")
         
         time.sleep(30)  # cada 30 segundos -bynd
 
@@ -119,15 +127,17 @@ def send_message():
 @app.route('/health', methods=['GET'])
 def health():
     # ey endpoint simple para verificar q todo jala -bynd
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'chats_loaded': len(chats_data)})
 
 def init_app():
     # chintrolas primero login y luego background thread -bynd
+    print("Iniciando app...")
     login_instagram()
     
     # ala iniciamos el thread q fetchea mensajes -bynd
     fetch_thread = threading.Thread(target=fetch_instagram_messages, daemon=True)
     fetch_thread.start()
+    print("✓ Background thread iniciado")
 
 if __name__ == '__main__':
     # q chidoteee para desarrollo local -bynd
