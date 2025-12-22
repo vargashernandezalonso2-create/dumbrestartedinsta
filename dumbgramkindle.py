@@ -18,9 +18,12 @@ chats_data = {}
 def login_instagram():
     # ey intentamos login con session guardada primero -bynd
     try:
-        client.load_settings('session.json')
-        client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        print("Login exitoso con session guardada")
+        if os.path.exists('session.json'):
+            client.load_settings('session.json')
+            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            print("Login exitoso con session guardada")
+        else:
+            raise Exception("No session file")
     except:
         # chintrolas no había session, login normal -bynd
         client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
@@ -118,14 +121,19 @@ def health():
     # ey endpoint simple para verificar q todo jala -bynd
     return jsonify({'status': 'ok'})
 
-if __name__ == '__main__':
+def init_app():
     # chintrolas primero login y luego background thread -bynd
     login_instagram()
     
     # ala iniciamos el thread q fetchea mensajes -bynd
     fetch_thread = threading.Thread(target=fetch_instagram_messages, daemon=True)
     fetch_thread.start()
-    
-    # q chidoteee ahora sí el servidor -bynd
+
+if __name__ == '__main__':
+    # q chidoteee para desarrollo local -bynd
+    init_app()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+else:
+    # vavavava para gunicorn en producción -bynd
+    init_app()
