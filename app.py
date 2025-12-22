@@ -8,37 +8,49 @@ import time
 
 app = Flask(__name__)
 
-# aaa configuración de Instagram -bynd
-INSTAGRAM_USERNAME = os.getenv('IG_USERNAME')
-INSTAGRAM_PASSWORD = os.getenv('IG_PASSWORD')
-SESSION_JSON = os.getenv('SESSION_JSON')  # ey la sesión desde variable de entorno -bynd
+# aaa configuración de Instagram con cookies -bynd
+SESSION_JSON = os.getenv('SESSION_JSON')  # ey las cookies desde variable de entorno -bynd
 
 client = Client()
 chats_data = {}
 
 def login_instagram():
-    # vavavava primero intentamos con la sesión guardada -bynd
+    # vavavava usamos las cookies directamente -bynd
     try:
         if SESSION_JSON:
-            # chintrolas cargamos la sesión desde la variable de entorno -bynd
-            session_data = json.loads(SESSION_JSON)
-            client.set_settings(session_data)
-            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            print("✓ Login exitoso con sesión guardada")
+            # chintrolas cargamos las cookies -bynd
+            cookies_data = json.loads(SESSION_JSON)
+            
+            # ey configuramos las settings del client con las cookies -bynd
+            settings = {
+                "uuids": {
+                    "phone_id": cookies_data.get('ig_did', ''),
+                    "uuid": cookies_data.get('ig_did', ''),
+                    "client_session_id": cookies_data.get('sessionid', ''),
+                    "advertising_id": cookies_data.get('ig_did', ''),
+                    "device_id": cookies_data.get('ig_did', '')
+                },
+                "cookies": {
+                    "sessionid": cookies_data.get('sessionid', ''),
+                    "ds_user_id": cookies_data.get('ds_user_id', ''),
+                    "csrftoken": cookies_data.get('csrftoken', ''),
+                    "mid": cookies_data.get('mid', ''),
+                    "ig_did": cookies_data.get('ig_did', '')
+                },
+                "last_login": int(datetime.now().timestamp())
+            }
+            
+            client.set_settings(settings)
+            
+            # fokeis verificamos q funcione -bynd
+            user_info = client.account_info()
+            print(f"✓ Login exitoso como @{user_info.username}")
         else:
-            # fokeis no hay sesión, login normal -bynd
-            print("No hay SESSION_JSON, haciendo login normal...")
-            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            print("✓ Login exitoso")
+            print("✗ No hay SESSION_JSON")
+            raise Exception("No SESSION_JSON provided")
     except Exception as e:
         print(f"✗ Error en login: {e}")
-        # ala último intento sin sesión -bynd
-        try:
-            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            print("✓ Login exitoso (segundo intento)")
-        except Exception as e2:
-            print(f"✗ Error fatal en login: {e2}")
-            raise e2
+        raise e
 
 def fetch_instagram_messages():
     # q chidoteee esta función corre en background cada 30 seg -bynd
@@ -53,24 +65,33 @@ def fetch_instagram_messages():
                 # aaa procesamos los mensajes -bynd
                 chat_messages = []
                 for msg in reversed(messages):  # orden cronológico -bynd
-                    sender_name = msg.user_id
+                    sender_name = str(msg.user_id)
                     # ey buscamos el username real -bynd
                     try:
-                        user_info = client.user_info(msg.user_id)
-                        sender_name = user_info.username
+                        if hasattr(msg, 'user') and msg.user:
+                            sender_name = msg.user.username
+                        else:
+                            user_info = client.user_info(msg.user_id)
+                            sender_name = user_info.username
                     except:
                         pass
                     
                     chat_messages.append({
                         'sender': sender_name,
                         'text': msg.text or '',
-                        'timestamp': msg.timestamp.isoformat(),
-                        'is_new': not msg.seen  # para el divisor de nuevos -bynd
+                        'timestamp': msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp),
+                        'is_new': not getattr(msg, 'seen', True)  # para el divisor de nuevos -bynd
                     })
                 
                 # chintrolas guardamos todo -bynd
+                chat_name = thread.thread_title
+                if not chat_name and hasattr(thread, 'users') and thread.users:
+                    chat_name = thread.users[0].username
+                if not chat_name:
+                    chat_name = f"Chat {thread_id[:8]}"
+                
                 chats_data[thread_id] = {
-                    'name': thread.thread_title or thread.users[0].username,
+                    'name': chat_name,
                     'messages': chat_messages,
                     'last_updated': datetime.now().isoformat()
                 }
