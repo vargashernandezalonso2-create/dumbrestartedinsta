@@ -1,12 +1,15 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS  # ey importamos CORS -bynd
 from instagrapi import Client
 import json
 import os
 from datetime import datetime
 import threading
 import time
+import random  # chintrolas para delays random -bynd
 
 app = Flask(__name__)
+CORS(app)  # vavavava esto permite requests desde cualquier origen -bynd
 
 # aaa configuración de Instagram con cookies -bynd
 SESSION_JSON = os.getenv('SESSION_JSON')  # ey las cookies desde variable de entorno -bynd
@@ -45,6 +48,7 @@ def login_instagram():
             # fokeis verificamos q funcione -bynd
             user_info = client.account_info()
             print(f"✓ Login exitoso como @{user_info.username}")
+            print(f"✓ User ID: {user_info.pk}")
         else:
             print("✗ No hay SESSION_JSON")
             raise Exception("No SESSION_JSON provided")
@@ -53,13 +57,17 @@ def login_instagram():
         raise e
 
 def fetch_instagram_messages():
-    # q chidoteee esta función corre en background cada 30 seg -bynd
+    # q chidoteee esta función corre en background cada 60 seg -bynd
     while True:
         try:
+            time.sleep(random.uniform(2, 4))  # ey delay random antes de fetchear -bynd
+            
             threads = client.direct_threads(amount=5)
             
             for thread in threads:
                 thread_id = str(thread.id)
+                
+                time.sleep(random.uniform(1, 2))  # chintrolas delay entre threads -bynd
                 messages = client.direct_messages(thread_id, amount=5)
                 
                 # aaa procesamos los mensajes -bynd
@@ -79,8 +87,7 @@ def fetch_instagram_messages():
                     chat_messages.append({
                         'sender': sender_name,
                         'text': msg.text or '',
-                        'timestamp': msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp),
-                        'is_new': not getattr(msg, 'seen', True)  # para el divisor de nuevos -bynd
+                        'timestamp': msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
                     })
                 
                 # chintrolas guardamos todo -bynd
@@ -101,7 +108,7 @@ def fetch_instagram_messages():
         except Exception as e:
             print(f"✗ Error fetching messages: {e}")
         
-        time.sleep(30)  # cada 30 segundos -bynd
+        time.sleep(60)  # fokeis cada 60 segundos ahora -bynd
 
 @app.route('/chats', methods=['GET'])
 def get_chats():
@@ -112,7 +119,6 @@ def get_chats():
             'id': thread_id,
             'name': data['name'],
             'last_message': data['messages'][-1]['text'] if data['messages'] else '',
-            'has_new': any(msg['is_new'] for msg in data['messages'])
         })
     
     return jsonify({'chats': chats_list})
@@ -140,9 +146,15 @@ def send_message():
         return jsonify({'error': 'Faltan datos'}), 400
     
     try:
-        client.direct_send(message, [int(thread_id)])
+        # chintrolas mandamos el mensaje -bynd
+        client.direct_send(message, thread_ids=[thread_id])
+        
+        # ey esperamos un poco y refrescamos ese chat -bynd
+        time.sleep(2)
+        
         return jsonify({'success': True})
     except Exception as e:
+        print(f"✗ Error sending: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
